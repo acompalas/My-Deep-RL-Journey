@@ -9,6 +9,8 @@ import plotly.graph_objects as go
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import pickle
+from sklearn.metrics import ConfusionMatrixDisplay
 
 st.title("Feed Forward Networks")
 
@@ -28,6 +30,376 @@ section = st.selectbox("", [
 
 if section == "Demo":
     st.title("Demo")
+    
+    st.markdown("""
+    Before we dive into feedforward networks, it’s important to see the difference between 
+        **Gradient Descent (GD)** and **Stochastic Gradient Descent (SGD)**.  
+    """)
+
+    st.subheader("Gradient Descent vs. Stochastic Gradient Descent")
+    st.markdown(r"""
+        **Full-Batch GD** uses the gradient of the **average loss across all data points**:
+        
+        $$
+        \nabla L(\theta) = \frac{1}{N} \sum_{i=1}^N \nabla \ell_i(\theta)
+        $$
+        
+        **Stochastic GD** uses the gradient from **just one random data point**:
+        $$
+        \nabla L(\theta) = \nabla \ell_i(\theta)
+        $$
+        
+        **Mini-Batch Stochastic GD** updates based on single datapoints in a batch
+        $$
+        \nabla L_B(\theta) = \frac{1}{k} \sum_{i\in B}^N \nabla \ell_i(\theta)
+        $$
+    """)
+    with st.expander("show/hide"):
+        st.markdown(r"""
+        Here we use a simple **linear regression** problem to illustrate.  
+        """)
+
+        st.subheader("1. Data Generation")
+        st.code("""
+        N = 1000
+        m_true, b_true = 2.0, 0.5
+        X = np.linspace(0, 1, N).reshape(-1, 1)
+        y = m_true * X + b_true + np.random.normal(0, 1, size=(N, 1))
+            """, language="python")
+
+        # -----------------------
+        # Loss function
+        # -----------------------
+
+        st.subheader("2. Loss Function")
+        st.code("""
+        def predict(X, w, b):
+            return X * w + b
+
+        def mse_loss(y_pred, y):
+            return np.mean((y_pred - y) ** 2)
+            """, language="python")
+
+        # -----------------------
+        # Training functions
+        # -----------------------
+
+        st.subheader("3. Training Functions")
+        
+        st.markdown(r"""
+        **Full Batch Gradient Descent**
+        """)
+        st.code("""
+        for _ in range(epochs):
+                y_pred = predict(X, w, b)
+                dw = np.mean(2 * X * (y_pred - y))
+                db = np.mean(2 * (y_pred - y))
+                w -= lr * dw
+                b -= lr * db
+        """, language="python")
+        
+        st.markdown("""
+        **Stochastic Gradient Descent**
+        """)
+        st.code("""
+        for _ in range(epochs):
+                indices = np.random.permutation(N)
+                losses = []
+                for i in indices:
+                    xi, yi = X[i], y[i]
+                    y_pred = predict(xi, w, b)
+                    dw = 2 * xi * (y_pred - yi)
+                    db = 2 * (y_pred - yi)
+                    w -= lr * dw
+                    b -= lr * db
+        """, language="python")
+
+        # -----------------------
+        # Run training + Plot
+        # -----------------------
+
+        st.subheader("4. Loss History")
+        st.markdown("Notice how **full-batch GD** yields a smooth, stable curve, while **SGD** is noisier but converges quickly.")
+        st.image("assets/gd_vs_sgd.png", caption="Gradient Descent vs. Stochastic Gradient Descent", use_container_width=True)
+
+    st.header("Feedforward Networks")
+    
+    with open("data/results.pkl", "rb") as f:
+        results = pickle.load(f) 
+    
+    st.markdown(r"""
+    For the following demonstrations we solve the classic classification task of MNIST handwritten digits using variations of **Mini-batch Stochastic Gradient Descent** with various optimizers in Pytorch trained on a T4 GPU in Google Colab.
+    """)
+    
+    st.subheader("Code")
+    with st.expander("show/hide"):
+        st.subheader("1. Data")
+        st.markdown("We download the built-in MNIST handwritten dataset from torchvision, transforming them into tensor format and load them as batches in Pytorch's Dataloader")
+        st.code("""
+tfm = transforms.ToTensor()
+train_set = datasets.MNIST(root="data", train=True,  download=True, transform=tfm)
+test_set  = datasets.MNIST(root="data", train=False, download=True, transform=tfm)
+
+train_loader = DataLoader(train_set, batch_size=128, shuffle=shuffle,
+                        num_workers=num_workers, pin_memory=(device=="cuda"))
+
+test_loader  = DataLoader(test_set,  batch_size=1024, shuffle=False,
+                        num_workers=num_workers, pin_memory=(device=="cuda"))
+            """, language="python")
+        
+        st.subheader("2. Basic MLP")
+        st.markdown("We structure a basic MLP meant to take in the flattened $28 \times 28$ tensor image and output the logits for the 10 classes")
+        st.code("""
+class MLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.flatten = nn.Flatten()
+        self.fc1 = nn.Linear(28*28, 256)   # 784 -> 256
+        self.fc2 = nn.Linear(256, 128)     # 256 -> 128
+        self.fc3 = nn.Linear(128, 10)      # 128 -> 10 (digits)
+
+    def forward(self, x):
+        x = self.flatten(x)        # [batch, 1, 28, 28] -> [batch, 784]
+        x = F.relu(self.fc1(x))    # hidden layer 1
+        x = F.relu(self.fc2(x))    # hidden layer 2
+        logits = self.fc3(x)       # output logits
+        return logits              # raw logits (no softmax here)
+
+    def predict(self, x):
+        logits = self.forward(x)
+        return F.softmax(logits, dim=1)  # probabilities for inference
+            """, language="python")
+        
+        st.subheader("3. Training Loop")
+        st.markdown("We train and evaluate the model storing the train and validation loss history")
+        st.code("""
+def train(model, optimizer, train_loader, val_loader, epochs=5):
+    model.to(device)
+
+    history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": [], "time": None}
+    start_time = time.time()  # start timer
+    for epoch in range(epochs):
+      model.train()
+      total_loss, total_correct, total = 0.0, 0, 0
+
+      for x, y in train_loader:
+          x, y = x.to(device), y.to(device)
+          logits = model(x)
+          loss = F.cross_entropy(logits, y)
+          optimizer.zero_grad()
+          loss.backward()
+          optimizer.step()
+
+          total_loss += loss.item() * y.size(0)
+          total_correct += (logits.argmax(1) == y).sum().item()
+          total += y.size(0)
+
+      train_loss = total_loss / total
+      train_acc = total_correct / total
+      val_loss, val_acc = evaluate(model, val_loader)
+
+      history["train_loss"].append(train_loss)
+      history["train_acc"].append(train_acc)
+      history["val_loss"].append(val_loss)
+      history["val_acc"].append(val_acc)
+      
+@torch.no_grad()                                         # override gradients to not update
+def evaluate(model, loader):
+  model.eval()
+  total_loss, total_correct, total = 0.0, 0, 0
+  for x, y in loader:
+    x, y = x.to(device), y.to(device)
+    logits = model(x)                                     # logits.shape() → [batch, classes]
+    loss = F.cross_entropy(logits, y, reduction="sum")    # get total loss of batch
+    total_loss += loss.item()                             # tensor → float then add
+    total_correct += (logits.argmax(1) == y).sum().item() # boolean operation checking if the argmax is same index as correct class
+    total += y.size(0)                                    # add number of items in batch to total
+  return total_loss/total, total_correct/total            # return mean loss
+            """, language="python")
+        
+        st.subheader("4. Usage")
+        st.markdown("Below is our usage as we train and evaluate our MNIST classification model, storing the results in a dictionary. Additionally we evaluate the test set with a confusion matrix")
+        st.code("""
+train_loader, test_loader = make_loaders(regime="minibatch", batch_size=128)
+model = MLP().to(device)
+opt = torch.optim.SGD(model.parameters(), lr=0.05)  # classic mini-batch SGD
+hist = train(model, opt, train_loader, test_loader, epochs=10)
+cm_data = collect_confusion_matrix(model, test_loader)
+results["Vanilla SGD"] = {**hist, **cm_data}
+            """, language="python")
+        
+        st.subheader("5. Visualizations")
+        st.markdown("We can visualize our train and validation loss history per epoch as well as the confusion matrix performance on the test set")
+        st.code("""
+plot_losses(results)
+plot_confusion_matrix(results, key="Vanilla SGD", normalize=True)
+            """, language="python")
+        
+    st.subheader("Compare Loss Profile")
+    st.markdown("We compare the training loss profile of each optimizer to compare how they converge on our MNIST classification problem.")
+    selected_opts = st.multiselect(
+    "Select optimizers to compare:",
+    list(results.keys()),
+    default=list(results.keys())[:2]  # pre-select first two
+    )
+
+    fig, ax = plt.subplots()
+
+    for opt in selected_opts:
+        history = results[opt]
+        ax.plot(history["train_loss"], label=opt)
+
+    ax.set_xlabel("Epochs")
+    ax.set_ylabel("Training Loss")
+    ax.legend()
+    st.pyplot(fig)
+    
+    st.subheader("Compare Confusion Matrices")
+
+    selected_opts_cm = st.multiselect(
+        "Select optimizers to compare confusion matrices:",
+        list(results.keys()),
+        default=list(results.keys())[:2]
+    )
+
+    cols = st.columns(2)  # 2-column layout
+
+    for i, opt in enumerate(selected_opts_cm):
+        if "confusion_matrix" in results[opt]:
+            cm = results[opt]["confusion_matrix"].astype(float)
+            # normalize per row (true class)
+            cm = cm / cm.sum(axis=1, keepdims=True)
+
+            fig, ax = plt.subplots(figsize=(4, 3))
+            im = ax.imshow(cm, cmap="Blues", vmin=0, vmax=1)  # consistent scale
+            ax.set_title(f"{opt}")
+            ax.set_xlabel("Predicted")
+            ax.set_ylabel("True")
+
+            # show values inside cells with smaller font
+            for r in range(cm.shape[0]):
+                for c in range(cm.shape[1]):
+                    ax.text(c, r, f"{cm[r, c]:.2f}",
+                            ha="center", va="center", color="black", fontsize=6)
+
+            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+            # send to correct column
+            cols[i % 2].pyplot(fig)
+        else:
+            st.warning(f"No confusion matrix found for {opt}")
+    
+    st.subheader("Optimizer Theory")
+    
+    optimizer_choice = st.radio(
+        "Select an optimizer to learn more about:",
+        list(results.keys())
+    )
+
+    if optimizer_choice == "Vanilla SGD":
+        st.markdown(r"""
+        #### **Stochastic Gradient Descent (SGD)**  
+        **Paper**: Robbins & Monro, 1951  
+        
+        **Formula**:  
+        $$
+        \theta_{t+1} = \theta_t - \eta \nabla L_i(\theta_t)
+        $$
+        
+        **Explanation**:  
+        Vanilla SGD updates parameters using the gradient of the loss on one sample or mini-batch.  
+        It is simple and widely used, but it converges slowly, is sensitive to the learning rate, and can oscillate in ravines.
+        """)
+
+    elif optimizer_choice == "SGD + Momentum":
+        st.markdown(r"""
+        #### **SGD with Momentum**  
+        **Paper**: Polyak, 1964  
+        
+        **Formula**:  
+        $$
+        v_t = \mu v_{t-1} - \eta \nabla L_t \\
+        \theta_{t+1} = \theta_t + v_t
+        $$
+        
+        **Explanation**:  
+        Momentum improves upon Stochastic Gradient Descent (SGD) by adding a "velocity" term that accumulates past gradients, helping to accelerate convergence, dampen oscillations, and escape local minima by maintaining a consistent direction and building speed in consistent gradient directions. This smoother, faster trajectory leads to more stable training and often better generalization in complex loss landscapes.
+        """)
+
+    elif optimizer_choice == "Adagrad":
+        st.markdown(r"""
+        #### **Adagrad (Adaptive Gradient)**  
+        **Paper**: Duchi, Hazan & Singer, 2011  
+        
+        **Formula**:  
+        $$
+        G_t = \sum_{\tau=1}^t (\nabla L_\tau)^2 \\
+        \theta_{t+1} = \theta_t - \frac{\eta}{\sqrt{G_t} + \epsilon} \nabla L_t
+        $$
+        
+        **Explanation**:  
+        Adagrad improves upon Stochastic Gradient Descent (SGD) by dynamically adapting the learning rate for each parameter based on a sum of its past squared gradients.
+        This "adaptive" nature allows Adagrad to assign larger updates to infrequent parameters (large gradients) and smaller updates to frequent ones (small gradients), leading to faster and more effective convergence, particularly in tasks with sparse data such as natural language processing and image recognition.
+        """)
+
+    elif optimizer_choice == "RMSprop":
+        st.markdown(r"""
+        #### **RMSProp**  
+        **Paper**: Geoffrey Hinton, Coursera Lecture 2012  
+        
+        **Formula**:  
+        $$
+        v_t = \beta v_{t-1} + (1-\beta)(\nabla L_t)^2 \\
+        \theta_{t+1} = \theta_t - \frac{\eta}{\sqrt{v_t + \epsilon}} \nabla L_t
+        $$
+        
+        **Explanation**:  
+        RMSProp fixes Adagrad’s decaying learning rate problem by using an **exponential moving average** of past squared gradients.  
+        preventing excessive learning rate decay and allowing it to adapt better by focusing on recent gradients. As a result, RMSProp generally converges faster and is more robust than Adagrad.
+        It works especially well for RNNs and non-stationary objectives.
+        """)
+
+    elif optimizer_choice == "Adam":
+        st.markdown(r"""
+        #### **Adam (Adaptive Moment Estimation)**  
+        **Paper**: Kingma & Ba, 2015  
+        
+        **Formula**:  
+        $$
+        m_t = \beta_1 m_{t-1} + (1-\beta_1)\nabla L_t \\
+        v_t = \beta_2 v_{t-1} + (1-\beta_2)(\nabla L_t)^2 \\
+        \hat{m}_t = \frac{m_t}{1-\beta_1^t}, \quad \hat{v}_t = \frac{v_t}{1-\beta_2^t} \\
+        \theta_{t+1} = \theta_t - \eta \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}
+        $$
+        
+        **Explanation**:  
+        Adam combines **Momentum** (first moment, $m_t$) and **RMSProp** (second moment, $v_t$).  
+        It adaptively adjusts learning rates and accelerates convergence.  
+        Compared to previous optimizers, Adam is less sensitive to hyperparameter tuning and works well across many tasks.
+        """)
+
+    elif optimizer_choice == "AdamW":
+        st.markdown(r"""
+        #### **AdamW**  
+        **Paper**: Loshchilov & Hutter, 2017  
+        
+        **Formula**:  
+        Adam update with **decoupled weight decay**:  
+        $$
+        \theta_{t+1} = \theta_t - \eta \left( \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon} + \lambda \theta_t \right)
+        $$
+        
+        **Explanation**:  
+        AdamW improves Adam by **decoupling weight decay from the gradient update**.  
+        In vanilla Adam, L2 regularization is implemented as part of the adaptive gradient step, which can lead to poor generalization.  
+        AdamW separates weight decay into its own step, yielding better performance in practice — especially for large models like Transformers.
+        """)
+
+
+        
+    
+    
+    
 
 if section == "Overview":
     st.title("Overview")
