@@ -394,11 +394,6 @@ plot_confusion_matrix(results, key="Vanilla SGD", normalize=True)
         In vanilla Adam, L2 regularization is implemented as part of the adaptive gradient step, which can lead to poor generalization.  
         AdamW separates weight decay into its own step, yielding better performance in practice — especially for large models like Transformers.
         """)
-
-
-        
-    
-    
     
 
 if section == "Overview":
