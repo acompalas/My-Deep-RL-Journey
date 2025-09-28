@@ -11,4 +11,5 @@ gymnasium
 gymnasium[classic-control]
 box2d
 imageio
-
+imageio[ffmpeg]
+imageio[pyav]
