@@ -1,0 +1,12 @@
+streamlit
+numpy
+pandas
+matplotlib
+seaborn
+plotly
+scikit-learn
+torch
+gymnasium
+imageio
+swig
+gymnasium[box2d]

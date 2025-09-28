@@ -36,6 +36,9 @@ DEEP_RL_PAGES = [
     st.Page("pages/DeepRL/02_Deep_Q_Networks.py",
             title="Deep Q Networks",
             url_path="rl-dqn"),
+    st.Page("pages/DeepRL/03_Advantage_Actor_Critic.py",
+            title="Advantage Actor Critic",
+            url_path="rl-a2c"),
 ]
 
 # --- Home page ---
