@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 import random
+import base64
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -43,7 +44,7 @@ if section == "Demo":
                 action = env.action_space.sample()
             
             obs, reward, terminated, truncated, _ = env.step(action)
-            frame = env.render()
+            frame = env.render(mode="rgb_array")
             frames.append(frame)
             
             done = terminated or truncated
@@ -60,6 +61,15 @@ if section == "Demo":
         with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as tmpfile:
             imageio.mimsave(tmpfile.name, frames, fps=fps)
             return tmpfile.name
+
+    def display_gif(gif_path, width=400):
+        with open(gif_path, "rb") as f:
+            data = f.read()
+        b64 = base64.b64encode(data).decode("utf-8")
+        st.markdown(
+            f"<img src='data:image/gif;base64,{b64}' width='{width}' loop autoplay>",
+            unsafe_allow_html=True
+        )
 
     st.title("Demo: Deep Q-Learning with Experience Replay")
 
@@ -343,10 +353,8 @@ if section == "Demo":
 
         # Save as temp video
         
-        st.write("Generating demo...")
         gif_path = render_episode_to_gif(env)
-        st.image(gif_path)
-
+        display_gif(gif_path)
 
 
     # # ---------------------------
