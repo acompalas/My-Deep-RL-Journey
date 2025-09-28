@@ -307,8 +307,9 @@ if section == "Demo":
             log_placeholder.code("\n".join(log_history), language="")
 
         # Save as temp video
-        tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=".gif")
-        imageio.mimsave(tmpfile.name, demo_frames, fps=30)
+        with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as tmpfile:
+            imageio.mimsave(tmpfile.name, demo_frames, fps=30)
+            st.image(tmpfile.name)
 
         video_placeholder.subheader("Demo Video")
         video_placeholder.video(tmpfile.name)
