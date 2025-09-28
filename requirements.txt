@@ -7,6 +7,7 @@ plotly
 scikit-learn
 torch
 gymnasium
-box2d
+gymnasium[classic-control]
+gymnasium[box2d]
 imageio
 swig
