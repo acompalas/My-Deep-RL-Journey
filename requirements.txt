@@ -9,6 +9,6 @@ torch
 swig
 gymnasium
 gymnasium[classic-control]
-gymnasium[box2d]
+box2d
 imageio
 
