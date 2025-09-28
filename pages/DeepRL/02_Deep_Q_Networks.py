@@ -44,7 +44,7 @@ if section == "Demo":
                 action = env.action_space.sample()
             
             obs, reward, terminated, truncated, _ = env.step(action)
-            frame = env.render(mode="rgb_array")
+            frame = env.render()
             frames.append(frame)
             
             done = terminated or truncated
