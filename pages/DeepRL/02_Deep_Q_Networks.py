@@ -26,6 +26,36 @@ section = st.selectbox(
 # Section: Demo
 # ---------------------------
 if section == "Demo":
+    def render_episode_to_video(env, agent=None, max_steps=500, fps=30):
+        frames = []
+        obs, _ = env.reset()
+        done = False
+
+        progress = st.progress(0)
+
+        for t in range(max_steps):
+            if agent:
+                action = agent.act(obs)
+            else:
+                action = env.action_space.sample()
+
+            obs, reward, terminated, truncated, _ = env.step(action)
+            frame = env.render()   # ✅ works since env was made with render_mode="rgb_array"
+            frames.append(frame)
+
+            done = terminated or truncated
+            if done:
+                break
+
+            progress.progress((t + 1) / max_steps)
+
+        progress.empty()
+
+        # Save as MP4
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmpfile:
+            imageio.mimsave(tmpfile.name, frames, fps=fps, codec="libx264")
+            return tmpfile.name
+
     st.title("Demo: Deep Q-Learning with Experience Replay")
 
     st.header("Deep Q-Learning Algorithm")
@@ -306,10 +336,8 @@ if section == "Demo":
             log_history.append(f"Episode {ep+1}/{n_demo_eps} | Return: {ep_ret:.1f}")
             log_placeholder.code("\n".join(log_history), language="")
 
-        # Save as temp video
-        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmpfile:
-            imageio.mimsave(tmpfile.name, demo_frames, fps=30)
-            st.image(tmpfile.name)
+        video_path = render_episode_to_video(env, max_steps=200)
+        st.video(video_path, format="video/mp4", start_time=0)
 
 
     # # ---------------------------
