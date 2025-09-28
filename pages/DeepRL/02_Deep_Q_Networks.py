@@ -26,6 +26,41 @@ section = st.selectbox(
 # Section: Demo
 # ---------------------------
 if section == "Demo":
+
+    def render_episode_to_gif(env, agent=None, max_steps=500, fps=30):
+        frames = []
+        obs, _ = env.reset()
+        done = False
+        
+        # Progress bar
+        progress = st.progress(0)
+        
+        for t in range(max_steps):
+            # choose action
+            if agent:
+                action = agent.act(obs)
+            else:
+                action = env.action_space.sample()
+            
+            obs, reward, terminated, truncated, _ = env.step(action)
+            frame = env.render(mode="rgb_array")
+            frames.append(frame)
+            
+            done = terminated or truncated
+            if done:
+                break
+            
+            # update progress bar
+            progress.progress((t + 1) / max_steps)
+        
+        # Clear the progress bar once done
+        progress.empty()
+        
+        # Save GIF to temp file
+        with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as tmpfile:
+            imageio.mimsave(tmpfile.name, frames, fps=fps)
+            return tmpfile.name
+
     st.title("Demo: Deep Q-Learning with Experience Replay")
 
     st.header("Deep Q-Learning Algorithm")
@@ -307,9 +342,11 @@ if section == "Demo":
             log_placeholder.code("\n".join(log_history), language="")
 
         # Save as temp video
-        with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as tmpfile:
-            imageio.mimsave(tmpfile.name, demo_frames, fps=30)
-            st.image(tmpfile.name)
+        
+        st.write("Generating demo...")
+        gif_path = render_episode_to_gif(env)
+        st.image(gif_path)
+
 
 
     # # ---------------------------
