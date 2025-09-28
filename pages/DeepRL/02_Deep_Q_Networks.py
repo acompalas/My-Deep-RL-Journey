@@ -309,6 +309,7 @@ if section == "Demo":
         # Save as temp video
         tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
         imageio.mimsave(tmpfile.name, demo_frames, fps=30)
+        video_placeholder.video(tmpfile.name)
 
     # # ---------------------------
     # # Training parameters
