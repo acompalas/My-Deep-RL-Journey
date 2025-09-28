@@ -311,8 +311,6 @@ if section == "Demo":
             imageio.mimsave(tmpfile.name, demo_frames, fps=30)
             st.image(tmpfile.name)
 
-        video_placeholder.subheader("Demo Video")
-        video_placeholder.video(tmpfile.name)
 
     # # ---------------------------
     # # Training parameters
