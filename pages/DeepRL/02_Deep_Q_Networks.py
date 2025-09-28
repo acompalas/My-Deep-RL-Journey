@@ -40,20 +40,22 @@ if section == "Demo":
                 action = env.action_space.sample()
 
             obs, reward, terminated, truncated, _ = env.step(action)
-            frame = env.render()   # ✅ works since env was made with render_mode="rgb_array"
+            frame = env.render()   # numpy array (H,W,3)
             frames.append(frame)
 
-            done = terminated or truncated
-            if done:
+            if terminated or truncated:
                 break
 
             progress.progress((t + 1) / max_steps)
 
         progress.empty()
 
-        # Save as MP4
+        # Save as MP4 with ffmpeg
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmpfile:
-            imageio.mimsave(tmpfile.name, frames, fps=fps, codec="libx264")
+            writer = imageio.get_writer(tmpfile.name, fps=fps, codec="libx264")
+            for f in frames:
+                writer.append_data(f)
+            writer.close()
             return tmpfile.name
 
     st.title("Demo: Deep Q-Learning with Experience Replay")
