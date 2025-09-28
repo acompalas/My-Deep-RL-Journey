@@ -374,7 +374,7 @@ if section == "Demo":
     col1, col2, col3 = st.columns(3)
     episodes = col1.number_input("Episodes", min_value=50, max_value=150, value=100, step=50)
     lr = col2.number_input("Learning Rate", min_value=1e-4, max_value=1e-1, value=1e-2, format="%.4f")
-    save_n = col3.number_input("Episodes to Save (video)", min_value=1, max_value=50, value=10, step=1)
+    save_n = col3.number_input("Episodes to Save (video)", min_value=1, max_value=5, value=5, step=1)
 
     train_button = st.button("Train", use_container_width=True)
     
