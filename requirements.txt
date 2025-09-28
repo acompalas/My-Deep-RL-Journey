@@ -6,8 +6,9 @@ seaborn
 plotly
 scikit-learn
 torch
+swig
 gymnasium
 gymnasium[classic-control]
 gymnasium[box2d]
 imageio
-swig
+
